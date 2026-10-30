@@ -382,7 +382,12 @@ jobs:
             destination="$MODS_DIR/$label"
             mkdir -p "$destination"
             echo "Extracting $label..."
-            unar -f -o "$destination" "$archive"
+            if unar -f -o "$destination" "$archive"; then
+              continue
+            fi
+
+            echo "::warning::$label is not a supported archive; treating it as a direct mod file."
+            cp "$archive" "$destination/$(basename "$archive")"
           done
 
           cat > "$WORK/apply_mods.py" <<'PY'
