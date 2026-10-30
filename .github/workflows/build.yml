@@ -110,10 +110,31 @@ jobs:
               exit 1
             fi
 
+            if [[ "$url" == *dropbox.com/* ]]; then
+              if [[ "$url" == *\?* ]]; then
+                if [[ "$url" == *"dl="* ]]; then
+                  url="${url//dl=0/dl=1}"
+                else
+                  url="${url}&dl=1"
+                fi
+              else
+                url="${url}?dl=1"
+              fi
+            fi
+
             echo "Downloading $(basename "$output")..."
             for attempt in 1 2 3; do
-              if gdown --continue "$url" -O "$output" \
-                && [[ -s "$output" ]]; then
+              rm -f "$output"
+
+              if [[ "$url" == *drive.google.com/* || "$url" == *docs.google.com/* ]]; then
+                downloader=(gdown --fuzzy --continue "$url" -O "$output")
+              else
+                downloader=(curl --fail --location --retry 3 --retry-all-errors \
+                  --connect-timeout 30 --max-time 1800 \
+                  --output "$output" "$url")
+              fi
+
+              if "${downloader[@]}" && [[ -s "$output" ]]; then
                 file "$output"
                 return
               fi
@@ -170,6 +191,7 @@ jobs:
             fi
 
             if [[ -n "$url" ]]; then
+              echo "Configuring optional mod $label from Mod_URL${index#1}..."
               download_file "$url" "$WORK/${label}.download"
             fi
           done
@@ -382,7 +404,11 @@ jobs:
             destination="$MODS_DIR/$label"
             mkdir -p "$destination"
             echo "Extracting $label..."
-            unar -f -o "$destination" "$archive"
+            if ! unar -f -o "$destination" "$archive"; then
+              echo "::error::$label is not a supported archive. "
+              echo "Mod_URL values must point directly to ZIP, RAR, 7z, or another unar-supported archive."
+              exit 1
+            fi
           done
 
           cat > "$WORK/apply_mods.py" <<'PY'
